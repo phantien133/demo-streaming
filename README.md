@@ -1,10 +1,17 @@
-# Streaming Learn
+# demo-streaming
 
 Go + Gin baseline for a learning-focused streaming system.
 
 ## Prerequisites
 - Go 1.25+
 - Docker + Docker Compose
+
+## Environment setup
+```bash
+cp .env.example .env
+```
+
+Both Go commands and `Makefile` read the same variables from `.env`.
 
 ## Run API locally
 ```bash
@@ -43,3 +50,23 @@ Services:
 ## Documentation
 - `documents/PROJECT_OVERVIEW.md`: architecture, components, and roadmap.
 - `documents/SETUP_AND_DEMO.md`: local setup and step-by-step demo runbook.
+- `documents/RTMP_AND_LL_HLS.md`: RTMP ingest and LL-HLS playback (see also `documents/README.md`).
+
+## Database migration (golang-migrate)
+This project uses `golang-migrate` via Go command at `cmd/migrate`.
+
+### Migration commands
+```bash
+make migrate-version
+make migrate-status
+make migrate-create name=create_users_table
+make migrate-up
+make migrate-down
+```
+
+### Notes
+- Default database URL: `postgres://streaming:streaming@localhost:5432/streaming?sslmode=disable`
+- Override any variable at runtime, for example:
+  - `make migrate-up DB_HOST=127.0.0.1`
+  - `make migrate-up DB_PORT=5432 DB_NAME=streaming`
+- Migrations are stored in `migrations/`.

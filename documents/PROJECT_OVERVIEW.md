@@ -1,4 +1,4 @@
-# Project Overview - Streaming Learn
+# Project Overview - demo-streaming
 
 ## Goal
 Build a learning-oriented live streaming platform using Go backend services, SRS media server, and a local CDN layer.

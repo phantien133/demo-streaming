@@ -2,16 +2,14 @@ package main
 
 import (
 	"log"
-	"os"
 
-	"streaming-learn/internal/server"
+	"demo-streaming/internal/config"
+	"demo-streaming/internal/server"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	config.LoadDotEnv()
+	port := config.Port()
 
 	router := server.NewRouter()
 	addr := ":" + port

@@ -1,4 +1,4 @@
-# Streaming Learn - Agent Guide
+# demo-streaming - Agent Guide
 
 ## Project Goal
 Build a learning-focused live streaming backend in Go with a web client and dockerized local stack.
