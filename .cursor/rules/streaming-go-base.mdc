@@ -1,0 +1,36 @@
+---
+description: Baseline engineering rules for Go streaming demo
+alwaysApply: true
+---
+
+# Go Streaming Demo Rules
+
+## Scope
+- This repository is a learning project for live streaming architecture.
+- Prioritize clarity, reliability, and local reproducibility over premature optimization.
+
+## Architecture Guardrails
+- Keep services modular: `api-gateway`, `backend`, `realtime-chat`, `worker`, `shared`.
+- Treat media server and transcoder as external components connected via callbacks and queues.
+- Use clean boundaries: HTTP handlers -> service layer -> repository layer.
+
+## Go Code Standards
+- Target current stable Go version and use Go modules from day one.
+- Pass `context.Context` through request-scoped operations.
+- Return typed errors and map them to stable API responses.
+- Write table-driven tests for business logic and handlers.
+
+## API and Realtime Conventions
+- Version HTTP APIs under `/api/v1`.
+- Keep DTOs explicit; do not expose internal entities directly.
+- For WebSocket flows, define message schema with `type`, `trace_id`, `payload`, `ts`.
+- Log every streaming lifecycle event with streamer id and correlation id.
+
+## Infrastructure Conventions
+- Every service must run via Docker with health checks.
+- Keep local development one-command with `docker compose up`.
+- Include `.env.example` for each service and never commit real secrets.
+
+## Workflow
+- Implement smallest vertical slice first: health, auth stub, stream session create/join.
+- Add concise docs whenever adding new modules or infra decisions.
