@@ -3,26 +3,28 @@ package main
 import (
 	"log"
 
+	"demo-streaming/internal/app"
 	"demo-streaming/internal/config"
-	"demo-streaming/internal/database"
 	"demo-streaming/internal/server"
 )
 
 func main() {
 	config.LoadDotEnv()
-	port := config.Port()
-	db, closeDB, err := database.NewGormDB(config.DatabaseURL())
+	systemCfg := config.LoadSystemConfig()
+	appCfg := config.LoadAppConfig()
+
+	container, err := app.NewContainer(systemCfg, appCfg)
 	if err != nil {
-		log.Fatalf("failed to connect database with gorm: %v", err)
+		log.Fatalf("failed to initialize app container: %v", err)
 	}
 	defer func() {
-		if err := closeDB(); err != nil {
-			log.Printf("failed to close database connection: %v", err)
+		if err := container.Close(); err != nil {
+			log.Printf("failed to close app container: %v", err)
 		}
 	}()
 
-	router := server.NewRouter(db)
-	addr := ":" + port
+	router := server.NewRouter(container)
+	addr := ":" + container.SystemConfig.Port
 
 	log.Printf("api server listening on %s", addr)
 	if err := router.Run(addr); err != nil {

@@ -1,4 +1,4 @@
-# demo-streaming
+# Demo-streaming
 
 Go + Gin baseline for a learning-focused streaming system.
 
@@ -21,6 +21,27 @@ go run ./cmd/api
 Health endpoints:
 - `GET /healthz`
 - `GET /api/v1/health`
+
+## JWT setup (demo)
+- Set app auth config in `.env`:
+  - `JWT_SECRET`
+  - optional `JWT_ISSUER`
+  - optional `JWT_ACCESS_TOKEN_TTL_SECONDS` (default 3600)
+  - optional `JWT_REFRESH_TOKEN_TTL_SECONDS` (default 604800, reserved for refresh-token flow)
+- Issue a token:
+  - `POST /api/v1/auth/token`
+  - body example: `{"user_id":1,"email":"user@example.com"}`
+  - role is assigned by server (`end_user`), TTL is loaded from env.
+- Refresh token (rotation):
+  - `POST /api/v1/auth/refresh`
+  - body example: `{"refresh_token":"<refresh_token>"}`
+- Revoke refresh token immediately:
+  - `POST /api/v1/auth/revoke`
+  - body example: `{"refresh_token":"<refresh_token>"}`
+  - token state is stored in Redis, so revoked refresh tokens are rejected right away.
+- Access protected endpoint:
+  - `GET /api/v1/auth/me`
+  - header: `Authorization: Bearer <access_token>`
 
 ## Run full local stack with Docker
 ```bash

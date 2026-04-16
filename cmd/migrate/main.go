@@ -15,6 +15,7 @@ import (
 
 func main() {
 	config.LoadDotEnv()
+	systemCfg := config.LoadSystemConfig()
 
 	var (
 		action  = flag.String("action", "", "migration action: up|down|force|version|create")
@@ -26,13 +27,13 @@ func main() {
 
 	switch *action {
 	case "create":
-		if err := createMigrationFiles(config.MigrationsDir(), *name); err != nil {
+		if err := createMigrationFiles(systemCfg.MigrationsDir, *name); err != nil {
 			log.Fatalf("create migration files failed: %v", err)
 		}
 		log.Printf("created migration files for %q", *name)
 		return
 	case "up", "down", "force", "version":
-		if err := runDatabaseMigration(*action, *steps, *version); err != nil {
+		if err := runDatabaseMigration(systemCfg, *action, *steps, *version); err != nil {
 			log.Fatalf("migration action %q failed: %v", *action, err)
 		}
 		return
@@ -41,9 +42,9 @@ func main() {
 	}
 }
 
-func runDatabaseMigration(action string, steps int, forceVersion int) error {
-	sourceURL := fmt.Sprintf("file://%s", config.MigrationsDir())
-	m, err := migrate.New(sourceURL, config.DatabaseURL())
+func runDatabaseMigration(systemCfg config.SystemConfig, action string, steps int, forceVersion int) error {
+	sourceURL := fmt.Sprintf("file://%s", systemCfg.MigrationsDir)
+	m, err := migrate.New(sourceURL, config.DatabaseURL(systemCfg))
 	if err != nil {
 		return err
 	}
