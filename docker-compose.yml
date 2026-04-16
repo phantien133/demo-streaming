@@ -40,5 +40,15 @@ services:
       - "8081:8080"
     command: ["./objs/srs", "-c", "conf/docker.conf"]
 
+  cdn:
+    image: nginx:1.27-alpine
+    container_name: streaming_cdn
+    depends_on:
+      - srs
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./deployments/nginx/cdn.conf:/etc/nginx/nginx.conf:ro
+
 volumes:
   pgdata:
