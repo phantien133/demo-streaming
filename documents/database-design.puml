@@ -9,8 +9,8 @@ skinparam entityBorderColor #444444
 skinparam arrowColor #333333
 
 legend top left
-  Core: users, publish sessions, view sessions.
-  Media abstraction: media_providers + media_ingest_bindings so ingest is not hard-coded to SRS.
+  Stream key exists **before** a live: **stream_keys** (OBS secret) then **stream_publish_sessions** (each go-live).
+  Media abstraction: media_providers + media_ingest_bindings.
   stream_publish_sessions.status: created, live, ended, failed.
   view_sessions: viewer_user_id or non-empty viewer_ref (guest).
   Chat / gifts / wallet: not shown.
@@ -34,12 +34,23 @@ entity "media_providers" as mp {
   created_at : timestamptz
 }
 
+entity "stream_keys" as sk {
+  * id : bigserial <<PK>>
+  --
+  * owner_user_id : bigint <<FK>>
+  * stream_key_secret : text <<UK>>
+  * media_provider_id : bigint <<FK>>
+  label : text
+  created_at : timestamptz
+  revoked_at : timestamptz
+}
+
 entity "stream_publish_sessions" as pub {
   * id : bigserial <<PK>>
   --
   * streamer_user_id : bigint <<FK>>
+  * stream_key_id : bigint <<FK>>
   * media_provider_id : bigint <<FK>>
-  * stream_key : text <<UK>>
   title : text
   status : text
   playback_url_cdn : text
@@ -76,27 +87,33 @@ entity "view_sessions" as view {
   last_seen_at : timestamptz
 }
 
-u ||--o{ pub : "streamer"
+u ||--o{ sk : "owns keys"
+mp ||--o{ sk : "ingest stack"
+sk ||--o{ pub : "many sessions\nper key (each live)"
+u ||--o{ pub : "streamer (denormalized)"
 mp ||--o{ pub : "ingest stack"
 pub ||--o| mib : "0..1 provider-native\nstate (webhook / adapter)"
 u ||--o{ view : "viewer (optional)"
 pub ||--o{ view : "one live / many viewers"
 
-note bottom of mp
-  Catalog of ingest vendors: **code** e.g. srs, later wowza, etc.
-  **config** holds non-secret defaults (vhost template, hook paths).
-  Swap provider = new row + adapter mapping into **media_ingest_bindings**.
+note bottom of sk
+  Created **before** first publish session (dashboard: Create stream key).
+  **stream_key_secret** is what OBS uses as Stream Key; rotate via **revoked_at** + new row.
 end note
 
 note bottom of pub
-  Product concepts only: stream_key, playback_url_cdn, status, times.
-  **media_provider_id** selects which adapter interprets webhooks and paths.
+  One row per **go-live** attempt; references the **stream_key** in use.
+  **streamer_user_id** matches **stream_keys.owner_user_id** for this row (enforce in app).
+  **playback_url_cdn** often derived from stream_key_secret or session id + CDN base.
+end note
+
+note bottom of mp
+  Catalog of ingest vendors: **code** e.g. srs.
+  **config**: non-secret defaults only; secrets in env / vault.
 end note
 
 note bottom of mib
-  Opaque fields for the active provider (SRS: client_id, vhost, app, param,
-  record path). **provider_context** for extra JSON from hooks without migrations.
-  Another provider maps its IDs into the same columns or JSON as needed.
+  SRS (or other) webhook fields + **provider_context** JSON.
 end note
 
 note bottom of view

@@ -1,0 +1,101 @@
+@startuml livestream-session-full-flow
+title Livestream flow: pre-provisioned stream key OR key created at go-live
+
+skinparam handwritten false
+skinparam backgroundColor #fafafa
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Streamer" as streamer
+participant "Streamer app\n(web / dashboard)" as sapp
+participant "API Gateway" as gw
+participant "Backend" as be
+database "PostgreSQL" as db
+database "Redis\n(cache / pub, optional)" as redis
+participant "SRS\n(media server)" as srs
+participant "CDN edge" as cdn
+actor "Viewer" as viewer
+participant "Viewer app\n(player)" as vapp
+
+autonumber 1 ". "
+
+== Choose how the stream key is created ==
+alt Mode A: create stream key early (streamer keeps it)
+  streamer -> sapp : Open channel settings / Create stream key
+  sapp -> gw : **POST** /api/v1/stream-keys\n(auth, label?, media_provider=srs)
+  gw -> be : forward
+  be -> db : INSERT **stream_keys**\n(owner_user_id, stream_key_secret, media_provider_id)
+  db --> be : stream_key_id + stream_key_secret
+  be --> gw : **201** { stream_key_id, stream_key_secret, rtmp_base_url }
+  gw --> sapp : JSON
+  sapp --> streamer : Store stream key for reuse across lives
+else Mode B: no key yet; create when user clicks Go live
+  note over streamer,sapp
+    UI may show a single **Go live** button.
+    Backend creates **stream_keys** inside the same transaction as the session.
+  end note
+end
+
+== Start a publish session (one go-live) ==
+streamer -> sapp : Click Go live, enter title
+sapp -> gw : **POST** /api/v1/publish-sessions\n(stream_key_id optional, title, …)
+gw -> be : forward
+
+alt Request includes stream_key_id (Mode A)
+  be -> db : SELECT **stream_keys** by id + owner\n(ensure not revoked)
+  db --> be : stream_key row
+else Request omits stream_key_id (Mode B)
+  be -> db : INSERT **stream_keys**\n(owner_user_id, stream_key_secret, media_provider_id)
+  db --> be : stream_key_id + stream_key_secret
+end
+
+be -> db : INSERT **stream_publish_sessions**\n(stream_key_id, streamer_user_id, media_provider_id,\nstatus=created, playback_url_cdn)
+be -> db : (optional) stub **media_ingest_bindings** after webhook
+db --> be : session_id, playback_url_cdn
+be --> gw : **201** { session_id, stream_key_id, stream_key_secret?, playback_url_cdn, rtmp_url_hint }
+gw --> sapp : JSON
+sapp --> streamer : Show RTMP URL + stream key for this session
+
+== Configure OBS / encoder ==
+streamer -> sapp : Paste RTMP URL + stream key
+note right of streamer
+  **rtmp://host:1935/live** + **stream_key_secret**
+end note
+
+== Go live: RTMP ingest ==
+sapp -> srs : **RTMP publish**\n(app `/live`, stream name = stream_key_secret)
+activate srs
+srs --> sapp : accept ingest
+
+== SRS notifies backend ==
+srs -> be : **HTTP callback** on_publish\n(app, stream, client_id, …)
+activate be
+be -> db : Resolve **stream_publish_sessions** by stream_key / session\nUPDATE status=**live**, started_at\nUPSERT **media_ingest_bindings**
+be -> redis : cache / pub (optional)
+be --> srs : **200**
+deactivate be
+deactivate srs
+
+== Viewer ==
+viewer -> vapp : Open live page
+vapp -> gw : **GET** /api/v1/publish-sessions/:id\nor WebSocket subscribe
+gw -> be : forward
+be -> db : SELECT session + playback_url_cdn
+be --> gw : **200** { status, playback_url_cdn, … }
+gw --> vapp : JSON / WS event
+
+vapp -> gw : **POST** /api/v1/view-sessions
+gw -> be : forward
+be -> db : INSERT **view_sessions**
+be --> vapp : **201**
+
+== Playback: HLS / LL-HLS ==
+vapp -> cdn : **GET** .m3u8 + segments
+cdn -> srs : origin fetch on cache MISS
+cdn --> vapp : media
+
+note over srs, cdn
+  **Live:** CDN origin is SRS.\n**VOD / replay:** later may origin from object storage (worker).
+end note
+
+@enduml
