@@ -16,6 +16,7 @@ MIGRATIONS_DIR ?= migrations
 
 include scripts/make/dev.mk
 include scripts/make/migrate.mk
+include scripts/make/db.mk
 
 .PHONY: help
 
@@ -34,3 +35,6 @@ help:
 	@echo "  make migrate-force version=1"
 	@echo "  make migrate-status   # alias of migrate-version"
 	@echo "  make migrate-up DB_HOST=postgres   # override for docker network"
+	@echo ""
+	@echo "Database utilities (scripts/make/db.mk):"
+	@echo "  make db-schema-snapshot   # write schema.sql to internal/database/"
