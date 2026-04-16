@@ -1,0 +1,12 @@
+---
+description: Rules for SQL migrations under migrations/ (golang-migrate)
+alwaysApply: true
+---
+
+# SQL migrations
+
+- **One migration version = one logical change.** Each `*_name.up.sql` / `.down.sql` pair should do a single, reviewable unit of work (e.g. create one table, add one column, add one index).
+- **Do not** bundle unrelated schema changes in the same version (e.g. avoid creating `users` and `view_sessions` in one file).
+- **Order:** respect foreign keys — create referenced tables in earlier versions than referencing tables; `down` drops in reverse dependency order (here: `view_sessions` → `stream_publish_sessions` → `users`).
+- **Version prefix:** use UTC wall time `YYYYMMDDHHmmss` (14 digits), same as `cmd/migrate/create.go` (`time.Now().UTC().Format("20060102150405")`). New migrations must use a **strictly greater** timestamp than the latest file so `golang-migrate` applies them in order. Prefer `go run ./cmd/migrate -action create -name your_change` to generate names.
+- Changing an already-applied migration file breaks `golang-migrate`; add a **new** version instead of editing history.

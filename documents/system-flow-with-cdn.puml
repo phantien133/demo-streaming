@@ -1,0 +1,107 @@
+@startuml system-flow-with-cdn
+title Live streaming system flow (with CDN for playback)
+
+skinparam handwritten true
+skinparam backgroundColor #1a1a1a
+skinparam defaultFontColor #f5f5f5
+skinparam arrowColor #e0e0e0
+skinparam rectangleBackgroundColor #2d2d2d
+skinparam rectangleBorderColor #888888
+skinparam databaseBackgroundColor #2d2d2d
+skinparam databaseBorderColor #888888
+
+skinparam noteBackgroundColor #2a2832
+skinparam noteBorderColor #8b8680
+skinparam noteFontColor #f0ebe3
+skinparam noteFontSize 13
+
+' --- Clients ---
+rectangle "Client (Streamer)" as streamer #2d2d2d
+note right of streamer
+  using OBS
+  H.264 compression
+  **Example ingest URL**
+  rtmp://your-platform.com/live/streamer_12345
+end note
+
+rectangle "Client (Web / iPhone / Android)" as viewers #2d2d2d
+note right of viewers
+  streaming options
+  HLS (15s+ latency)
+  LL-HLS (3-5s latency)
+end note
+
+' --- Edge & media (rectangle: avoids cloud keyword issues on some renderers) ---
+rectangle "CDN\n(edge cache, segment delivery)" as cdn #3a3a4a
+
+rectangle "Media Server (SRS)\n(origin for HLS / LL-HLS)" as srs #2d2d2d
+
+rectangle "Transcode Module" as transcode #2d2d2d
+note bottom of transcode
+  create different quality outputs
+  480, 720, 1080
+end note
+
+' --- Application tier ---
+rectangle "API Gateway\n- routing\n- load balancer\n- middleware" as gateway #2d2d2d
+
+rectangle "Backend Server\n(horizontal scaling + load balancing)" as backend #2d2d2d
+
+database "DB\n(PostgreSQL / durable state)" as db #2d2d2d
+note right of db
+  Chat, gifts, wallet,
+  DM, leaderboard, admin
+end note
+
+database "Cache (Redis)" as redis #2d2d2d
+note top of redis
+  distributed lock
+end note
+
+rectangle "Message queue\n(NATS / Redis Streams)" as mq #2d2d2d
+
+rectangle "Worker\n(async media persistence)" as worker #2d2d2d
+note bottom of worker
+  Consumes jobs: finalize ingest record
+  or transcode output, upload **VOD /
+  replay** assets, write playback URLs.
+end note
+
+rectangle "Object storage\n(S3-compatible)" as obj #2d2d2d
+note bottom of obj
+  Durable **replay** manifests + segments
+  (or MP4). Often fronted by CDN for VOD.
+end note
+
+' --- Ingest & transcode ---
+streamer -down-> srs : **RTMP**
+srs <-> transcode : transcode pipeline
+
+' --- Signaling & app API ---
+streamer <-> gateway : **WebSocket (chat)**\n**REST (API)**
+viewers <-> gateway : **WebSocket (chat)**\n**REST (API)**
+gateway <-> backend
+
+' --- SRS callbacks & data ---
+srs -down-> backend : **callback**\n(on_publish / on_unpublish,\non_record, etc.)
+backend <-> db
+backend <-> redis : **distributed lock**\ncache / sessions
+
+' --- Async VOD / replay persistence (off request path) ---
+backend ..> mq : **publish job**\n(record done, packaging)
+mq ..> worker : **consume**
+worker ..> srs : **read**\nrecorded files\n(shared volume / fetch)
+worker -right-> obj : **upload**\nHLS / MP4 for replay
+worker ..> db : **VOD metadata**\n(playback URL, status)
+
+' --- Playback: origin -> CDN -> viewers (production pattern) ---
+srs -right-> cdn : **LL-HLS / HLS**\n(origin pull or push)
+cdn -down-> viewers : **LL-HLS / HLS**\n(low-latency segments)
+
+note bottom of cdn
+  **Live:** viewers hit CDN; origin is SRS.
+  **Replay:** CDN (or signed URLs) may origin
+  from **object storage** after worker upload.
+end note
+
+@enduml

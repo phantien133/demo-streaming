@@ -16,7 +16,7 @@ migrate-down:
 	go run ./cmd/migrate -action down
 
 migrate-force:
-	@if [ -z "$(version)" ]; then echo "Usage: make migrate-force version=1"; exit 1; fi
+	@if [ -z "$(version)" ]; then echo "Usage: make migrate-force version=20260416120003"; exit 1; fi
 	go run ./cmd/migrate -action force -version $(version)
 
 migrate-status: migrate-version

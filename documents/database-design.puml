@@ -1,0 +1,106 @@
+@startuml database-design-demo-streaming
+title Demo streaming — core relational model (PostgreSQL)
+
+skinparam handwritten false
+skinparam backgroundColor #fafafa
+skinparam defaultFontColor #222222
+skinparam entityBackgroundColor #ffffff
+skinparam entityBorderColor #444444
+skinparam arrowColor #333333
+
+legend top left
+  Core: users, publish sessions, view sessions.
+  Media abstraction: media_providers + media_ingest_bindings so ingest is not hard-coded to SRS.
+  stream_publish_sessions.status: created, live, ended, failed.
+  view_sessions: viewer_user_id or non-empty viewer_ref (guest).
+  Chat / gifts / wallet: not shown.
+end legend
+
+entity "users" as u {
+  * id : bigserial <<PK>>
+  --
+  * email : text <<UK>>
+  display_name : text
+  created_at : timestamptz
+}
+
+entity "media_providers" as mp {
+  * id : bigserial <<PK>>
+  --
+  * code : text <<UK>>
+  display_name : text
+  api_base_url : text
+  config : jsonb
+  created_at : timestamptz
+}
+
+entity "stream_publish_sessions" as pub {
+  * id : bigserial <<PK>>
+  --
+  * streamer_user_id : bigint <<FK>>
+  * media_provider_id : bigint <<FK>>
+  * stream_key : text <<UK>>
+  title : text
+  status : text
+  playback_url_cdn : text
+  created_at : timestamptz
+  started_at : timestamptz
+  ended_at : timestamptz
+}
+
+entity "media_ingest_bindings" as mib {
+  * id : bigserial <<PK>>
+  --
+  * publish_session_id : bigint <<FK>> <<UK>>
+  provider_publish_id : text
+  provider_vhost : text
+  provider_app : text
+  ingest_query_param : text
+  record_local_uri : text
+  last_callback_action : text
+  last_callback_at : timestamptz
+  provider_context : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "view_sessions" as view {
+  * id : bigserial <<PK>>
+  --
+  * publish_session_id : bigint <<FK>>
+  viewer_user_id : bigint <<FK>>
+  viewer_ref : text
+  client_type : text
+  joined_at : timestamptz
+  left_at : timestamptz
+  last_seen_at : timestamptz
+}
+
+u ||--o{ pub : "streamer"
+mp ||--o{ pub : "ingest stack"
+pub ||--o| mib : "0..1 provider-native\nstate (webhook / adapter)"
+u ||--o{ view : "viewer (optional)"
+pub ||--o{ view : "one live / many viewers"
+
+note bottom of mp
+  Catalog of ingest vendors: **code** e.g. srs, later wowza, etc.
+  **config** holds non-secret defaults (vhost template, hook paths).
+  Swap provider = new row + adapter mapping into **media_ingest_bindings**.
+end note
+
+note bottom of pub
+  Product concepts only: stream_key, playback_url_cdn, status, times.
+  **media_provider_id** selects which adapter interprets webhooks and paths.
+end note
+
+note bottom of mib
+  Opaque fields for the active provider (SRS: client_id, vhost, app, param,
+  record path). **provider_context** for extra JSON from hooks without migrations.
+  Another provider maps its IDs into the same columns or JSON as needed.
+end note
+
+note bottom of view
+  Logged-in: viewer_user_id set. Guest: viewer_ref non-empty.
+end note
+
+@enduml
