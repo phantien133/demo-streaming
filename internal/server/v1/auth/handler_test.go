@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	internalAuth "demo-streaming/internal/auth"
+	authpkg "demo-streaming/internal/auth"
 	"demo-streaming/internal/config"
 	"demo-streaming/internal/middleware"
+	redisutil "demo-streaming/internal/utils/redis"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -156,7 +157,7 @@ func TestHandlerMe(t *testing.T) {
 		h, _, _ := newTestHandler(t)
 		rec := performRequest(t, func(r *gin.Engine) {
 			r.GET("/auth/me", func(c *gin.Context) {
-				c.Set(middleware.AuthClaimsContextKey, &internalAuth.Claims{
+				c.Set(middleware.AuthClaimsContextKey, &authpkg.Claims{
 					UserID: 321,
 					Email:  "me@example.com",
 					Role:   "end_user",
@@ -182,7 +183,7 @@ func newTestHandler(t *testing.T) (*Handler, *miniredis.Miniredis, *redis.Client
 	mr := miniredis.RunT(t)
 	redisClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
-	jwtManager, err := internalAuth.NewJWTManager("test-secret", "test-issuer")
+	jwtManager, err := authpkg.NewJWTManager("test-secret", "test-issuer")
 	if err != nil {
 		t.Fatalf("failed to create jwt manager: %v", err)
 	}
@@ -193,7 +194,8 @@ func newTestHandler(t *testing.T) (*Handler, *miniredis.Miniredis, *redis.Client
 			JWTAccessTokenTTLSeconds:  3600,
 			JWTRefreshTokenTTLSeconds: 7200,
 		},
-		Redis: redisClient,
+		Redis:      redisClient,
+		RedisUtils: redisutil.NewRedisUtils(redisClient),
 	}, mr, redisClient
 }
 
@@ -240,7 +242,7 @@ func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	return body
 }
 
-func parseClaims(t *testing.T, jwtManager *internalAuth.JWTManager, token string) *internalAuth.Claims {
+func parseClaims(t *testing.T, jwtManager *authpkg.JWTManager, token string) *authpkg.Claims {
 	t.Helper()
 	claims, err := jwtManager.ParseToken(token)
 	if err != nil {

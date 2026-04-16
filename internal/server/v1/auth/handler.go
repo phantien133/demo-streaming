@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"demo-streaming/internal/auth"
 	"demo-streaming/internal/config"
 	"demo-streaming/internal/middleware"
+	redisutil "demo-streaming/internal/utils/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
@@ -18,6 +20,7 @@ type Handler struct {
 	JWTManager *auth.JWTManager
 	AppConfig  config.AppConfig
 	Redis      *redis.Client
+	RedisUtils *redisutil.RedisUtils
 }
 
 type CreateTokenRequest struct {
@@ -85,8 +88,8 @@ func (h *Handler) Refresh(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if _, err := h.Redis.Get(ctx, refreshKey(claims.ID)).Result(); err != nil {
-		if err == redis.Nil {
+	if _, err := h.RedisUtils.GetString(ctx, refreshKey(claims.ID)); err != nil {
+		if errors.Is(err, redisutil.ErrKeyNotFound) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token revoked or expired"})
 			return
 		}
@@ -130,18 +133,18 @@ func (h *Handler) Revoke(c *gin.Context) {
 	}
 
 	ctx := context.Background()
-	if err := h.Redis.Del(ctx, refreshKey(claims.ID)).Err(); err != nil {
+	if err := h.RedisUtils.DeleteKey(ctx, refreshKey(claims.ID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke refresh token"})
 		return
 	}
 	userKey := userRefreshKey(claims.UserID)
-	currentTokenID, err := h.Redis.Get(ctx, userKey).Result()
+	currentTokenID, err := h.RedisUtils.GetString(ctx, userKey)
 	if err == nil && currentTokenID == claims.ID {
-		if err := h.Redis.Del(ctx, userKey).Err(); err != nil {
+		if err := h.RedisUtils.DeleteKey(ctx, userKey); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke refresh token"})
 			return
 		}
-	} else if err != nil && err != redis.Nil {
+	} else if err != nil && !errors.Is(err, redisutil.ErrKeyNotFound) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke refresh token"})
 		return
 	}
@@ -188,10 +191,10 @@ func (h *Handler) rotateUserRefreshToken(
 ) error {
 	userKey := userRefreshKey(userID)
 	if oldTokenID == "" {
-		currentTokenID, err := h.Redis.Get(ctx, userKey).Result()
+		currentTokenID, err := h.RedisUtils.GetString(ctx, userKey)
 		if err == nil && currentTokenID != "" {
 			oldTokenID = currentTokenID
-		} else if err != nil && err != redis.Nil {
+		} else if err != nil && !errors.Is(err, redisutil.ErrKeyNotFound) {
 			return err
 		}
 	}

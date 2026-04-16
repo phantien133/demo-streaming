@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	internalAuth "demo-streaming/internal/auth"
+	authpkg "demo-streaming/internal/auth"
 	"demo-streaming/internal/config"
 	"github.com/gin-gonic/gin"
 )
@@ -101,10 +101,10 @@ func TestRegisterRoutes_EndpointsAreReachable(t *testing.T) {
 	}
 }
 
-func newTestRouter(t *testing.T) (*gin.Engine, *internalAuth.JWTManager) {
+func newTestRouter(t *testing.T) (*gin.Engine, *authpkg.JWTManager) {
 	t.Helper()
 
-	jwtManager, err := internalAuth.NewJWTManager("test-secret", "test-issuer")
+	jwtManager, err := authpkg.NewJWTManager("test-secret", "test-issuer")
 	if err != nil {
 		t.Fatalf("failed to create jwt manager: %v", err)
 	}
@@ -122,7 +122,7 @@ func newTestRouter(t *testing.T) (*gin.Engine, *internalAuth.JWTManager) {
 	return r, jwtManager
 }
 
-func mustAccessToken(t *testing.T, jwtManager *internalAuth.JWTManager) string {
+func mustAccessToken(t *testing.T, jwtManager *authpkg.JWTManager) string {
 	t.Helper()
 
 	token, err := jwtManager.GenerateToken(123, "user@example.com", "end_user", time.Hour)

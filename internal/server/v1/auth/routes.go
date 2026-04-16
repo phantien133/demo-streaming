@@ -4,6 +4,7 @@ import (
 	"demo-streaming/internal/auth"
 	"demo-streaming/internal/config"
 	"demo-streaming/internal/middleware"
+	redisutil "demo-streaming/internal/utils/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
@@ -19,6 +20,7 @@ func RegisterRoutes(v1 *gin.RouterGroup, deps Deps) {
 		JWTManager: deps.JWTManager,
 		AppConfig:  deps.AppConfig,
 		Redis:      deps.Redis,
+		RedisUtils: redisutil.NewRedisUtils(deps.Redis),
 	}
 
 	v1.POST("/auth/token", handler.CreateToken)

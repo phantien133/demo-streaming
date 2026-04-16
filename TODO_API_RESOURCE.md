@@ -9,15 +9,22 @@ Checklist API resources for the streaming demo project.
 
 ## 2) Auth (MVP can be stubbed)
 - [ ] `POST /api/v1/auth/login`
-- [ ] `POST /api/v1/auth/refresh`
-- [ ] `GET /api/v1/auth/me`
+- [x] `POST /api/v1/auth/token`
+- [x] `POST /api/v1/auth/refresh`
+- [x] `POST /api/v1/auth/revoke`
+- [x] `GET /api/v1/auth/me`
 
-## 3) Users / Streamers
+## 3) Stream Keys
+- [x] `POST /api/v1/stream-keys`
+- [x] `POST /api/v1/stream-keys/refresh`
+- [x] `POST /api/v1/stream-keys/revoke`
+
+## 4) Users / Streamers
 - [ ] `GET /api/v1/users/:id`
 - [ ] `GET /api/v1/streamers/:id`
 - [ ] `GET /api/v1/streamers/:id/live-status`
 
-## 4) Stream Sessions (MVP core)
+## 5) Stream Sessions (MVP core)
 - [ ] `POST /api/v1/streams`
 - [ ] `GET /api/v1/streams/:streamId`
 - [ ] `PATCH /api/v1/streams/:streamId`
@@ -26,29 +33,29 @@ Checklist API resources for the streaming demo project.
 - [ ] `GET /api/v1/streams/:streamId/playback`
 - [ ] `GET /api/v1/streams?status=live|ended&cursor=...`
 
-## 5) Media Webhooks (SRS -> backend)
+## 6) Media Webhooks (SRS -> backend)
 - [ ] `POST /api/v1/media/webhooks/srs/on-publish`
 - [ ] `POST /api/v1/media/webhooks/srs/on-unpublish`
 - [ ] `POST /api/v1/media/webhooks/srs/on-play`
 - [ ] `POST /api/v1/media/webhooks/srs/on-record`
 
-## 6) Chat / Realtime
+## 7) Chat / Realtime
 - [ ] `GET /api/v1/streams/:streamId/chat/history`
 - [ ] `POST /api/v1/streams/:streamId/chat/messages`
 - [ ] `WS /ws/streams/:streamId/chat`
 
-## 7) Gifts / Wallet
+## 8) Gifts / Wallet
 - [ ] `GET /api/v1/wallets/me/balance`
 - [ ] `POST /api/v1/streams/:streamId/gifts`
 - [ ] `GET /api/v1/streams/:streamId/gifts`
 - [ ] `GET /api/v1/transactions?cursor=...`
 
-## 8) Stats / Leaderboard
+## 9) Stats / Leaderboard
 - [ ] `GET /api/v1/streams/:streamId/stats`
 - [ ] `GET /api/v1/streams/:streamId/leaderboard`
 - [ ] `GET /api/v1/streamers/:id/analytics`
 
-## 9) Admin / Moderation
+## 10) Admin / Moderation
 - [ ] `POST /api/v1/admin/streams/:streamId/terminate`
 - [ ] `POST /api/v1/admin/streams/:streamId/mute-user`
 - [ ] `GET /api/v1/admin/reports`

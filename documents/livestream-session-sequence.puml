@@ -41,12 +41,31 @@ streamer -> sapp : Click Go live, enter title
 sapp -> gw : **POST** /api/v1/publish-sessions\n(stream_key_id optional, title, …)
 gw -> be : forward
 
-alt Request includes stream_key_id (Mode A)
+be -> db : Check active pre-provisioned **stream_keys** for owner\n(where revoked_at IS NULL)
+db --> be : active stream key exists?
+
+alt User already has active pre-provisioned stream key
+  note over be
+    Enforce single active key policy:
+    do NOT create a new go-live key.
+    Request must use existing stream_key_id.
+  end note
+  alt Request includes matching stream_key_id (Mode A)
+    be -> db : SELECT **stream_keys** by id + owner\n(ensure not revoked)
+    db --> be : stream_key row
+  else Request omits/mismatches stream_key_id
+    be --> gw : **409** { error: "active pre-provisioned stream key must be reused" }
+    gw --> sapp : Show message: reuse existing stream key
+    return
+  end
+else No active pre-provisioned stream key
+  alt Request includes stream_key_id (Mode A)
   be -> db : SELECT **stream_keys** by id + owner\n(ensure not revoked)
   db --> be : stream_key row
-else Request omits stream_key_id (Mode B)
-  be -> db : INSERT **stream_keys**\n(owner_user_id, stream_key_secret, media_provider_id)
-  db --> be : stream_key_id + stream_key_secret
+  else Request omits stream_key_id (Mode B)
+    be -> db : INSERT **stream_keys**\n(owner_user_id, stream_key_secret, media_provider_id)
+    db --> be : stream_key_id + stream_key_secret
+  end
 end
 
 be -> db : INSERT **stream_publish_sessions**\n(stream_key_id, streamer_user_id, media_provider_id,\nstatus=created, playback_url_cdn)

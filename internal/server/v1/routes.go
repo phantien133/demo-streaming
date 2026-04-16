@@ -2,19 +2,24 @@ package v1
 
 import (
 	"demo-streaming/internal/app"
-	featureAuth "demo-streaming/internal/server/v1/auth"
-	featureHealth "demo-streaming/internal/server/v1/health"
+	"demo-streaming/internal/server/v1/auth"
+	"demo-streaming/internal/server/v1/health"
+	"demo-streaming/internal/server/v1/streamkeys"
 
 	"github.com/gin-gonic/gin"
 )
 
 func Register(router *gin.RouterGroup, container *app.Container) {
-	featureHealth.RegisterRoutes(router, featureHealth.Deps{
+	health.RegisterRoutes(router, health.Deps{
 		DB: container.DB,
 	})
-	featureAuth.RegisterRoutes(router, featureAuth.Deps{
+	auth.RegisterRoutes(router, auth.Deps{
 		JWTManager: container.JWTManager,
 		AppConfig:  container.AppConfig,
+		Redis:      container.Redis,
+	})
+	streamkeys.RegisterRoutes(router, streamkeys.Deps{
+		JWTManager: container.JWTManager,
 		Redis:      container.Redis,
 	})
 }
