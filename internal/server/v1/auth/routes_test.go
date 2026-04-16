@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 
 	authpkg "demo-streaming/internal/auth"
 	"demo-streaming/internal/config"
+	authservice "demo-streaming/internal/services/auth"
 	"github.com/gin-gonic/gin"
 )
 
@@ -117,9 +119,18 @@ func newTestRouter(t *testing.T) (*gin.Engine, *authpkg.JWTManager) {
 			JWTAccessTokenTTLSeconds:  3600,
 			JWTRefreshTokenTTLSeconds: 7200,
 		},
+		LoginService: loginServiceStub(func(context.Context, authservice.LoginInput) (authservice.LoginOutput, error) {
+			return authservice.LoginOutput{UserID: 123, Email: "user@example.com"}, nil
+		}),
 	})
 
 	return r, jwtManager
+}
+
+type loginServiceStub func(ctx context.Context, input authservice.LoginInput) (authservice.LoginOutput, error)
+
+func (f loginServiceStub) Execute(ctx context.Context, input authservice.LoginInput) (authservice.LoginOutput, error) {
+	return f(ctx, input)
 }
 
 func mustAccessToken(t *testing.T, jwtManager *authpkg.JWTManager) string {

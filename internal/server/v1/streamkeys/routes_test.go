@@ -8,11 +8,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"sync/atomic"
 
 	authpkg "demo-streaming/internal/auth"
+	"demo-streaming/internal/database"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestStreamKeyRoutes_Unauthorized(t *testing.T) {
@@ -142,14 +146,73 @@ func newTestRouter(t *testing.T) (*gin.Engine, *redis.Client) {
 		t.Fatalf("failed to create jwt manager: %v", err)
 	}
 
+	db := newTestDB(t)
+
 	r := gin.New()
 	v1 := r.Group("/api/v1")
 	RegisterRoutes(v1, Deps{
 		JWTManager: jwtManager,
 		Redis:      redisClient,
+		DB:         db,
 	})
 	return r, redisClient
 }
+
+func newTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	// Use a unique in-memory sqlite DB per test to avoid cross-test locking,
+	// since many tests in this package run in parallel.
+	id := atomic.AddUint64(&testDBCounter, 1)
+	dsn := fmt.Sprintf("file:streamkeys_%d_%d?mode=memory&cache=shared", time.Now().UnixNano(), id)
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite db: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("failed to get sqlite sql db: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+
+	// Minimal schema needed by streamkeys handler (media_providers).
+	if err := db.Exec(`
+PRAGMA busy_timeout = 5000;
+CREATE TABLE IF NOT EXISTS media_providers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  api_base_url TEXT,
+  config TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS stream_keys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL,
+  stream_key_secret TEXT NOT NULL UNIQUE,
+  media_provider_id INTEGER NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_at DATETIME
+);
+`).Error; err != nil {
+		t.Fatalf("failed to create tables: %v", err)
+	}
+
+	// Seed SRS provider config for ingest.rtmp_url.
+	cfg := `{"rtmp_base_url":"rtmp://localhost:1935/live"}`
+	if err := db.Create(&database.MediaProvider{
+		Code:   "srs",
+		DisplayName: "SRS",
+		Config: []byte(cfg),
+	}).Error; err != nil {
+		t.Fatalf("failed to seed media provider: %v", err)
+	}
+
+	return db
+}
+
+var testDBCounter uint64
 
 func mustAccessToken(t *testing.T) string {
 	t.Helper()

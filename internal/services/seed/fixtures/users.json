@@ -1,0 +1,17 @@
+[
+  {
+    "email": "streamer01@example.com",
+    "display_name": "Streamer 01",
+    "password": "password123"
+  },
+  {
+    "email": "streamer02@example.com",
+    "display_name": "Streamer 02",
+    "password": "password123"
+  },
+  {
+    "email": "streamer03@example.com",
+    "display_name": "Streamer 03",
+    "password": "password123"
+  }
+]

@@ -22,7 +22,8 @@ func redisKey(userID int64) string {
 	return fmt.Sprintf("%s%d", streamKeyRedisPrefix, userID)
 }
 
-func generateStreamKey() (string, error) {
+// GenerateStreamKey returns a high-entropy secret for RTMP ingest (stream name on SRS).
+func GenerateStreamKey() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
 		return "", err

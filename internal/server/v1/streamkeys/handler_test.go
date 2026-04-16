@@ -18,7 +18,7 @@ func TestHandlerCreate_ErrorMapping(t *testing.T) {
 	t.Parallel()
 
 	h := &Handler{
-		CreateService: createServiceFunc(func(context.Context, int64) (string, int64, error) {
+		CreateService: createServiceFunc(func(context.Context, int64, *int64) (string, int64, error) {
 			return "", 0, errors.New("boom")
 		}),
 	}
@@ -92,10 +92,10 @@ func performWithClaims(t *testing.T, handler gin.HandlerFunc) *httptest.Response
 	return rec
 }
 
-type createServiceFunc func(ctx context.Context, userID int64) (string, int64, error)
+type createServiceFunc func(ctx context.Context, userID int64, expiresInSeconds *int64) (string, int64, error)
 
-func (f createServiceFunc) Execute(ctx context.Context, userID int64) (string, int64, error) {
-	return f(ctx, userID)
+func (f createServiceFunc) Execute(ctx context.Context, userID int64, expiresInSeconds *int64) (string, int64, error) {
+	return f(ctx, userID, expiresInSeconds)
 }
 
 type refreshServiceFunc func(ctx context.Context, userID int64) (string, int64, error)

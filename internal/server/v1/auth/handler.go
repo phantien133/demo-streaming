@@ -11,21 +11,27 @@ import (
 	"demo-streaming/internal/auth"
 	"demo-streaming/internal/config"
 	"demo-streaming/internal/middleware"
+	authservice "demo-streaming/internal/services/auth"
 	redisutil "demo-streaming/internal/utils/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
 type Handler struct {
-	JWTManager *auth.JWTManager
-	AppConfig  config.AppConfig
-	Redis      *redis.Client
-	RedisUtils *redisutil.RedisUtils
+	JWTManager   *auth.JWTManager
+	AppConfig    config.AppConfig
+	Redis        *redis.Client
+	RedisUtils   *redisutil.RedisUtils
+	LoginService authservice.LoginService
+}
+
+type ErrorResponse struct {
+	Error string `json:"error"`
 }
 
 type CreateTokenRequest struct {
-	UserID int64  `json:"user_id" binding:"required"`
-	Email  string `json:"email" binding:"required,email"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
 type RefreshTokenRequest struct {
@@ -36,12 +42,43 @@ type RevokeTokenRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
+type TokenPairResponse struct {
+	AccessToken           string `json:"access_token"`
+	RefreshToken          string `json:"refresh_token"`
+	TokenType             string `json:"token_type"`
+	AccessTokenExpiresIn  int64  `json:"access_token_expires_in"`
+	RefreshTokenExpiresIn int64  `json:"refresh_token_expires_in"`
+}
+
+type RevokeResponse struct {
+	Status string `json:"status"`
+}
+
+type MeResponse struct {
+	UserID int64  `json:"user_id"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+	Issuer string `json:"issuer"`
+}
+
 const (
 	defaultEndUserRole  = "end_user"
 	refreshRedisKeyPref = "auth:refresh:"
 	userRefreshKeyPref  = "auth:user_refresh:"
 )
 
+// CreateToken issues access + refresh tokens.
+//
+// @Summary Login and create token pair
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body CreateTokenRequest true "login credentials"
+// @Success 200 {object} TokenPairResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/token [post]
 func (h *Handler) CreateToken(c *gin.Context) {
 	var req CreateTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -49,16 +86,29 @@ func (h *Handler) CreateToken(c *gin.Context) {
 		return
 	}
 
+	loginOut, err := h.LoginService.Execute(c.Request.Context(), authservice.LoginInput{
+		Email:    req.Email,
+		Password: req.Password,
+	})
+	if err != nil {
+		if errors.Is(err, authservice.ErrInvalidCredentials) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to login"})
+		return
+	}
+
 	ttl := h.accessTokenTTL()
 	refreshTTL := h.refreshTokenTTL()
 
-	accessToken, err := h.JWTManager.GenerateToken(req.UserID, req.Email, defaultEndUserRole, ttl)
+	accessToken, err := h.JWTManager.GenerateToken(loginOut.UserID, loginOut.Email, defaultEndUserRole, ttl)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
 	}
 
-	refreshToken, refreshTokenID, err := h.JWTManager.GenerateRefreshToken(req.UserID, req.Email, defaultEndUserRole, refreshTTL)
+	refreshToken, refreshTokenID, err := h.JWTManager.GenerateRefreshToken(loginOut.UserID, loginOut.Email, defaultEndUserRole, refreshTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate refresh token"})
 		return
@@ -66,7 +116,7 @@ func (h *Handler) CreateToken(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	providedAt := time.Now().Unix()
-	if err := h.rotateUserRefreshToken(ctx, req.UserID, "", refreshTokenID, providedAt, refreshTTL); err != nil {
+	if err := h.rotateUserRefreshToken(ctx, loginOut.UserID, "", refreshTokenID, providedAt, refreshTTL); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store refresh token"})
 		return
 	}
@@ -74,6 +124,18 @@ func (h *Handler) CreateToken(c *gin.Context) {
 	c.JSON(http.StatusOK, tokenPairResponse(accessToken, refreshToken, ttl, refreshTTL))
 }
 
+// Refresh rotates refresh token and returns a new token pair.
+//
+// @Summary Refresh token pair
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body RefreshTokenRequest true "refresh token"
+// @Success 200 {object} TokenPairResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/refresh [post]
 func (h *Handler) Refresh(c *gin.Context) {
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -119,6 +181,18 @@ func (h *Handler) Refresh(c *gin.Context) {
 	c.JSON(http.StatusOK, tokenPairResponse(newAccessToken, newRefreshToken, accessTTL, refreshTTL))
 }
 
+// Revoke invalidates a refresh token immediately.
+//
+// @Summary Revoke refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body RevokeTokenRequest true "refresh token"
+// @Success 200 {object} RevokeResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/auth/revoke [post]
 func (h *Handler) Revoke(c *gin.Context) {
 	var req RevokeTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -152,6 +226,15 @@ func (h *Handler) Revoke(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "revoked"})
 }
 
+// Me returns JWT claims for the current user.
+//
+// @Summary Get current user claims
+// @Tags auth
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} MeResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /api/v1/auth/me [get]
 func (h *Handler) Me(c *gin.Context) {
 	rawClaims, ok := c.Get(middleware.AuthClaimsContextKey)
 	if !ok {

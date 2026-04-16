@@ -1,0 +1,28 @@
+---
+description: RESTful router and action-based service checklist
+alwaysApply: true
+---
+
+# API Service Checklist
+
+## Router
+- Keep endpoints RESTful and resource-oriented; prefer plural nouns and kebab-case paths.
+- Version all HTTP APIs under `/api/v1`.
+- Register routes by feature and keep router definitions thin.
+
+## Handler
+- Define request/response DTOs at the handler boundary.
+- Validate path/query/body params in handler before calling services.
+- Map domain/service errors to stable HTTP status codes and messages.
+- Avoid business logic in handlers.
+
+## Services
+- Implement services with action-based structure (`CreateXService`, `StartXService`, etc.).
+- Expose one action per service via `Execute(...)`.
+- Keep shared constants, errors, and shared contracts in `common`/`contracts`.
+- Keep persistence and domain transitions in services, not in handlers.
+
+## Testing
+- Add unit tests for router/handler mappings (auth, validation, status mapping).
+- Add unit tests for service behavior (happy path + key failure branches).
+- Update tests when route naming or response contracts change.

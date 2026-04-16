@@ -12,11 +12,11 @@ Build a learning-oriented live streaming platform using Go backend services, SRS
 - **PostgreSQL:** durable storage for users, stream sessions, gifts, and history.
 
 ## High-Level Flow
-1. Streamer publishes to SRS over RTMP (`/live/<stream_key>`).
-2. SRS generates HLS output (`.m3u8`, `.ts`/`.m4s`).
-3. Viewer requests playback from Nginx CDN edge.
-4. CDN serves cached segments or fetches from SRS origin on cache miss.
-5. Backend handles non-media data: stream metadata, chat, gifts, leaderboard.
+1. Streamer publishes to SRS over RTMP (`/live/<stream_key>`; in this demo `stream_key` = `playback_id`).
+2. SRS holds the live stream; a **transcode worker** (optional) reads that stream and writes **multi-bitrate HLS** to disk (`tmp/transcode/<playback_id>/`).
+3. Viewer opens the **master playlist** on the CDN: `/live/<playback_id>/master.m3u8` (files served from the transcode volume when present).
+4. Until ABR exists, viewers can use the **flat** CDN URL `/live/<playback_id>.m3u8`, which proxies through the API to SRS single-bitrate HLS.
+5. Backend handles non-media data: stream metadata, webhooks, transcode job queue, chat, etc.
 
 ## Why Local CDN Layer
 - Demonstrate realistic architecture without external cloud CDN.

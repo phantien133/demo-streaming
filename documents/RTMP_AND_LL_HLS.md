@@ -82,7 +82,7 @@ LL-HLS is an **implementation profile** of HLS aimed at **reducing latency** ver
 | **CDN** | Not the classic “HTTP file” model | Fits HTTP caching very well |
 | **Viewer latency** | Not directly applicable (viewers rarely use RTMP) | Lower than ordinary HLS, still > 0 |
 
-In this project’s demo pipeline: **RTMP into SRS** → **HLS (can be tuned toward LL-HLS)** → **Nginx CDN** → **player**.
+In this project’s demo pipeline: **RTMP into SRS** → **optional FFmpeg transcode (ABR)** → **multi-bitrate HLS** on the CDN path **`/live/<playback_id>/master.m3u8`** (or flat **`/live/<playback_id>.m3u8`** via API proxy to SRS) → **player**. Details: `PLAYBACK_FLOW.md`.
 
 ---
 

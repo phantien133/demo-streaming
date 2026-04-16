@@ -1,0 +1,291 @@
+{
+  "info": {
+    "_postman_id": "d7e5b4b6-2d8f-4f6b-9b1b-4b2b8d0d7b1a",
+    "name": "demo-streaming (local)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "GET /healthz",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/healthz"
+          }
+        },
+        {
+          "name": "GET /api/v1/health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/token (login)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}\n"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', json.access_token);",
+                  "pm.collectionVariables.set('refreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}\n"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', json.access_token);",
+                  "pm.collectionVariables.set('refreshToken', json.refresh_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/auth/revoke",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}\n"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/revoke"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stream Keys",
+      "item": [
+        {
+          "name": "POST /api/v1/stream-keys",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expires_in\": {{streamKeyExpiresIn}}\n}\n"
+            },
+            "url": "{{baseUrl}}/api/v1/stream-keys"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('streamKey', json.stream_key);",
+                  "pm.collectionVariables.set('ingestRtmpUrl', json.ingest && json.ingest.rtmp_url);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/stream-keys/refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/stream-keys/refresh"
+          }
+        },
+        {
+          "name": "POST /api/v1/stream-keys/revoke",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/stream-keys/revoke"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stream Publish Sessions",
+      "item": [
+        {
+          "name": "GET /api/v1/stream-publish-sessions (list, pagination)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/stream-publish-sessions?page={{publishSessionsPage}}&limit={{publishSessionsLimit}}"
+          }
+        },
+        {
+          "name": "POST /api/v1/stream-publish-sessions (create)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Demo live\"\n}\n"
+            },
+            "url": "{{baseUrl}}/api/v1/stream-publish-sessions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('publishSessionId', json.session_id);",
+                  "pm.collectionVariables.set('playbackUrl', json.playback_url_cdn);",
+                  "if (json.ingest) {",
+                  "  pm.collectionVariables.set('ingestRtmpUrl', json.ingest.rtmp_url || '');",
+                  "  if (json.ingest.stream_key) {",
+                  "    pm.collectionVariables.set('streamKey', json.ingest.stream_key);",
+                  "  }",
+                  "}",
+                  "if (json.playback_url_cdn) {",
+                  "  const match = String(json.playback_url_cdn).match(/\\/live\\/([0-9a-f]+)\\/master\\.m3u8/);",
+                  "  if (match && match[1]) {",
+                  "    pm.collectionVariables.set('playbackId', match[1]);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/stream-publish-sessions/:id/start",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/stream-publish-sessions/{{publishSessionId}}/start"
+          }
+        },
+        {
+          "name": "POST /api/v1/stream-publish-sessions/:id/stop",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/stream-publish-sessions/{{publishSessionId}}/stop"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('endedAt', json.ended_at);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Media Webhooks",
+      "item": [
+        {
+          "name": "POST /api/v1/media/webhooks/srs/on-publish (manual)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-SRS-Secret", "value": "{{srsWebhookSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app\": \"live\",\n  \"stream\": \"{{streamKey}}\",\n  \"param\": \"token=demo\"\n}\n"
+            },
+            "url": "{{baseUrl}}/api/v1/media/webhooks/srs/on-publish"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "streamKey", "value": "" },
+    { "key": "streamKeyExpiresIn", "value": "86400" },
+    { "key": "ingestRtmpUrl", "value": "" },
+    { "key": "publishSessionsPage", "value": "1" },
+    { "key": "publishSessionsLimit", "value": "20" },
+    { "key": "publishSessionId", "value": "" },
+    { "key": "playbackId", "value": "" },
+    { "key": "playbackUrl", "value": "" },
+    { "key": "endedAt", "value": "" },
+    { "key": "srsWebhookSecret", "value": "" }
+  ]
+}
+

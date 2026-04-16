@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	authpkg "demo-streaming/internal/auth"
 	"demo-streaming/internal/config"
 	"demo-streaming/internal/middleware"
+	authservice "demo-streaming/internal/services/auth"
 	redisutil "demo-streaming/internal/utils/redis"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
@@ -34,7 +36,7 @@ func TestHandlerCreateToken(t *testing.T) {
 		t.Parallel()
 
 		h, _, _ := newTestHandler(t)
-		rec := performJSONRequest(t, h.CreateToken, http.MethodPost, "/auth/token", `{"user_id":123,"email":"user@example.com"}`)
+		rec := performJSONRequest(t, h.CreateToken, http.MethodPost, "/auth/token", `{"email":"user@example.com","password":"pw"}`)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("unexpected status: got %d want %d", rec.Code, http.StatusOK)
 		}
@@ -196,7 +198,16 @@ func newTestHandler(t *testing.T) (*Handler, *miniredis.Miniredis, *redis.Client
 		},
 		Redis:      redisClient,
 		RedisUtils: redisutil.NewRedisUtils(redisClient),
+		LoginService: loginServiceFunc(func(context.Context, authservice.LoginInput) (authservice.LoginOutput, error) {
+			return authservice.LoginOutput{UserID: 123, Email: "user@example.com"}, nil
+		}),
 	}, mr, redisClient
+}
+
+type loginServiceFunc func(ctx context.Context, input authservice.LoginInput) (authservice.LoginOutput, error)
+
+func (f loginServiceFunc) Execute(ctx context.Context, input authservice.LoginInput) (authservice.LoginOutput, error) {
+	return f(ctx, input)
 }
 
 func performJSONRequest(

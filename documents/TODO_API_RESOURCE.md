@@ -25,6 +25,8 @@ Checklist API resources for the streaming demo project.
 - [ ] `GET /api/v1/streamers/:id/live-status`
 
 ## 5) Stream Sessions (MVP core)
+- [x] `POST /api/v1/stream-publish-sessions`
+- [x] `POST /api/v1/stream-publish-sessions/:id/start`
 - [ ] `POST /api/v1/streams`
 - [ ] `GET /api/v1/streams/:streamId`
 - [ ] `PATCH /api/v1/streams/:streamId`

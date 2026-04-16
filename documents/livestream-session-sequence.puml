@@ -26,7 +26,7 @@ alt Mode A: create stream key early (streamer keeps it)
   gw -> be : forward
   be -> db : INSERT **stream_keys**\n(owner_user_id, stream_key_secret, media_provider_id)
   db --> be : stream_key_id + stream_key_secret
-  be --> gw : **201** { stream_key_id, stream_key_secret, rtmp_base_url }
+  be --> gw : **201** { stream_key_id, stream_key_secret (ingest signing secret), rtmp_base_url }
   gw --> sapp : JSON
   sapp --> streamer : Store stream key for reuse across lives
 else Mode B: no key yet; create when user clicks Go live
@@ -38,7 +38,7 @@ end
 
 == Start a publish session (one go-live) ==
 streamer -> sapp : Click Go live, enter title
-sapp -> gw : **POST** /api/v1/publish-sessions\n(stream_key_id optional, title, …)
+sapp -> gw : **POST** /api/v1/stream-publish-sessions\n(stream_key_id optional, title, …)
 gw -> be : forward
 
 be -> db : Check active pre-provisioned **stream_keys** for owner\n(where revoked_at IS NULL)
@@ -68,15 +68,15 @@ else No active pre-provisioned stream key
   end
 end
 
-be -> db : INSERT **stream_publish_sessions**\n(stream_key_id, streamer_user_id, media_provider_id,\nstatus=created, playback_url_cdn)
+be -> db : INSERT **stream_publish_sessions**\n(stream_key_id, playback_id, streamer_user_id, media_provider_id,\nstatus=created, playback_url_cdn)
 be -> db : (optional) stub **media_ingest_bindings** after webhook
 db --> be : session_id, playback_url_cdn
-be --> gw : **201** { session_id, stream_key_id, stream_key_secret?, playback_url_cdn, rtmp_url_hint }
+be --> gw : **201** { session_id, playback_url_cdn,\n ingest={ rtmp_url, stream_key_secret (credential) } }
 gw --> sapp : JSON
-sapp --> streamer : Show RTMP URL + stream key for this session
+sapp --> streamer : Show RTMP URL + stream key (credential)
 
 == Configure OBS / encoder ==
-streamer -> sapp : Paste RTMP URL + stream key
+streamer -> sapp : Paste RTMP URL + stream key (credential)
 note right of streamer
   **rtmp://host:1935/live** + **stream_key_secret**
 end note
@@ -87,9 +87,9 @@ activate srs
 srs --> sapp : accept ingest
 
 == SRS notifies backend ==
-srs -> be : **HTTP callback** on_publish\n(app, stream, client_id, …)
+srs -> be : **HTTP callback** on_publish\n(app, stream=stream_key_secret, param="...", client_id, …)
 activate be
-be -> db : Resolve **stream_publish_sessions** by stream_key / session\nUPDATE status=**live**, started_at\nUPSERT **media_ingest_bindings**
+be -> db : Resolve **stream_keys** by stream_key_secret\nResolve latest created **stream_publish_sessions**\nUPDATE status=**live**, started_at\nUPSERT **media_ingest_bindings**
 be -> redis : cache / pub (optional)
 be --> srs : **200**
 deactivate be
@@ -97,7 +97,7 @@ deactivate srs
 
 == Viewer ==
 viewer -> vapp : Open live page
-vapp -> gw : **GET** /api/v1/publish-sessions/:id\nor WebSocket subscribe
+vapp -> gw : **GET** /api/v1/stream-publish-sessions/:id\nor WebSocket subscribe
 gw -> be : forward
 be -> db : SELECT session + playback_url_cdn
 be --> gw : **200** { status, playback_url_cdn, … }
@@ -110,7 +110,9 @@ be --> vapp : **201**
 
 == Playback: HLS / LL-HLS ==
 vapp -> cdn : **GET** .m3u8 + segments
-cdn -> srs : origin fetch on cache MISS
+cdn -> gw : proxy fetch playlist/segments by playback_id\n(cache on CDN)
+gw -> be : GET /api/v1/playback/:playback_id/index.m3u8\nGET /api/v1/playback/:playback_id/segments/:name
+be -> srs : origin fetch by stream_key_secret
 cdn --> vapp : media
 
 note over srs, cdn

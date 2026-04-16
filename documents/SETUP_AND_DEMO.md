@@ -22,15 +22,16 @@ Wait until these services are healthy/ready:
 In OBS settings:
 - **Service:** Custom
 - **Server:** `rtmp://localhost:1935/live`
-- **Stream key:** choose a value, e.g. `demo123`
+- **Stream key:** use your **stream key credential** (stable). For quick demo, pick a value and keep it, e.g. `my-channel-key`
 
 Start streaming from OBS.
 
 ## 4) Playback URLs
-- **SRS origin:** `http://localhost:8081/live/demo123.m3u8`
-- **CDN edge:** `http://localhost:8088/live/demo123.m3u8`
+- **CDN ABR master (after transcode worker has written the pack):** `http://localhost:8088/live/<playback_id>/master.m3u8`
+- **CDN flat (API → SRS, single-bitrate, works before transcode):** `http://localhost:8088/live/<playback_id>.m3u8`
+- **SRS origin (internal):** `http://localhost:8081/live/<playback_id>.m3u8`
 
-Use a browser player supporting HLS or a simple page with `hls.js`.
+Use a browser player supporting HLS or a simple page with `hls.js`. See `PLAYBACK_FLOW.md` for the full pipeline.
 
 ## 5) CDN cache check
 Request the CDN URL repeatedly and inspect headers:
@@ -46,7 +47,7 @@ Caching policy in this demo:
 - `GET http://localhost:8080/api/v1/health`
 
 ## 7) Troubleshooting quick list
-- **Playback 404:** verify stream key and OBS publish status.
+- **Playback 404:** verify `playback_id` exists (API create session) and OBS publish status.
 - **No cache HIT:** request the same segment URL multiple times.
 - **High latency:** reduce HLS segment duration in origin config (future tuning).
 - **CORS issues in web client:** CDN already sets permissive CORS headers.

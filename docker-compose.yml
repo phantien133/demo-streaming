@@ -1,11 +1,25 @@
 services:
-  api:
+  # HTTP API (hot reload via air). Only API service in this compose file.
+  api-dev:
     build:
       context: .
-      dockerfile: Dockerfile.api
-    container_name: streaming_api
+      dockerfile: Dockerfile.api.dev
+    container_name: streaming_api_dev
+    env_file:
+      - .env
     environment:
       PORT: 8080
+      # IMPORTANT: inside docker network, use service names (not localhost).
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: streaming
+      DB_PASSWORD: streaming
+      DB_NAME: streaming
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - ./:/app
     ports:
       - "8080:8080"
     depends_on:
@@ -38,17 +52,57 @@ services:
       - "1935:1935"
       - "1985:1985"
       - "8081:8080"
-    command: ["./objs/srs", "-c", "conf/docker.conf"]
+    volumes:
+      - ./deployments/srs/config.conf:/usr/local/srs/conf/local.conf:ro
+    command: ["./objs/srs", "-c", "conf/local.conf"]
 
+  # Edge (8088): transcode ABR from ./tmp/transcode + API/SRS fallback for flat /live/<hex>.m3u8.
   cdn:
     image: nginx:1.27-alpine
     container_name: streaming_cdn
+    restart: unless-stopped
     depends_on:
+      - api-dev
       - srs
     ports:
-      - "8088:8088"
+      - "0.0.0.0:8088:8088"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8088/cdn-healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     volumes:
       - ./deployments/nginx/cdn.conf:/etc/nginx/nginx.conf:ro
+      - ./tmp/transcode:/var/transcode:ro
+
+  transcode:
+    profiles: ["transcode"]
+    build:
+      context: .
+      dockerfile: Dockerfile.transcode
+    container_name: streaming_transcode
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: streaming
+      DB_PASSWORD: streaming
+      DB_NAME: streaming
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TRANSCODE_ENABLED: "true"
+      # Pull from RTMP so ffmpeg does not depend on HLS .m3u8 existing yet (avoids immediate 404 after on_publish).
+      TRANSCODE_INPUT_RTMP_BASE_URL: rtmp://srs:1935/live
+      TRANSCODE_INPUT_BASE_URL: http://srs:8080/live
+      TRANSCODE_OUTPUT_DIR: /app/tmp/transcode
+    depends_on:
+      - redis
+      - srs
+    volumes:
+      - ./tmp/transcode:/app/tmp/transcode
 
 volumes:
   pgdata:

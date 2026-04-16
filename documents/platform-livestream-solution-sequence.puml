@@ -1,0 +1,111 @@
+@startuml platform-livestream-solution-sequence
+title Typical livestream platform solution (YouTube/Twitch/Facebook/IVS/Mux)
+
+skinparam handwritten false
+skinparam backgroundColor #fafafa
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Streamer" as streamer
+participant "Streamer app\n(OBS/mobile/web)" as sapp
+
+participant "Platform\nControl plane API" as api
+database "Platform DB" as db
+participant "Auth/Token\nSigner" as signer
+
+participant "Ingest edge\n(RTMP/SRT/WebRTC)" as ingest
+participant "Media processing\n(transcode/ABR)" as transcode
+participant "Packager\n(HLS/LL-HLS/DASH)" as packager
+participant "Origin\n(storage/cache)" as origin
+participant "CDN" as cdn
+
+actor "Viewer" as viewer
+participant "Viewer app\n(web/mobile player)" as vapp
+
+autonumber 1 ". "
+
+== Setup / Go-live ==
+streamer -> sapp : Create / schedule a live stream
+sapp -> api : POST /live-streams\n(auth, metadata)
+api -> db : INSERT live stream record\n(channel_id, title, policy, ...)
+db --> api : live_id
+
+note over api, signer
+  Platform generates ingest credentials.
+  Common patterns:
+  - static stream key per channel (rotateable)
+  - per-event stream key
+  - signed ingest URL (expiring token)
+end note
+
+api -> signer : issue ingest credential\n(live_id, scope, exp?)
+signer --> api : stream_key / token
+api --> sapp : 201 { ingest_endpoint, stream_key/token,\n playback_preview, dashboard_urls }
+
+== Publishing / Ingest ==
+streamer -> sapp : Configure encoder with ingest info
+sapp -> ingest : Publish RTMP/SRT/WebRTC\n(app/stream + token)
+activate ingest
+
+note over ingest
+  Ingest edge validates:
+  - stream key ownership / token signature
+  - region routing, rate limits
+  - optional DRM-ish policies (rare for ingest)
+end note
+
+alt invalid credentials
+  ingest --> sapp : reject publish (auth failed)
+  deactivate ingest
+  return
+else valid credentials
+  ingest --> sapp : accept ingest
+end
+
+== Processing pipeline ==
+ingest -> transcode : forward ingest media
+activate transcode
+transcode -> packager : encoded renditions\n(1080/720/480, audio)
+activate packager
+packager -> origin : write playlists + segments/chunks
+activate origin
+
+== Playback publish ==
+note over api, db
+  Platform flips live state to "LIVE"
+  (based on ingest signals + health thresholds).
+end note
+ingest -> api : ingest event\n(on_publish/heartbeat)
+api -> db : UPDATE live status=LIVE\nstarted_at=now()
+
+== Viewer playback ==
+viewer -> vapp : Open watch page
+vapp -> api : GET /live-streams/{id}\n(playback URLs + status)
+api -> db : SELECT status + playback info
+db --> api : LIVE + playback URLs
+api --> vapp : 200 { status=LIVE,\n playback={HLS/LL-HLS/DASH/WebRTC} }
+
+alt HLS/LL-HLS/DASH
+  vapp -> cdn : GET playlist + segments
+  cdn -> origin : origin fetch on MISS
+  origin --> cdn : media
+  cdn --> vapp : media
+else WebRTC low-latency playback (select platforms)
+  vapp -> ingest : WebRTC join\n(WHEP/ICE/DTLS/SRTP)
+  ingest --> vapp : media (sub-second latency)
+end
+
+== End of stream ==
+sapp -> ingest : stop publishing / disconnect
+deactivate ingest
+ingest -> api : ingest ended event
+api -> db : UPDATE status=ENDED\nended_at=now()
+
+note over origin, cdn
+  Platforms often keep:
+  - DVR window during live
+  - VOD asset after end (optional trimming)
+end note
+
+@enduml
+

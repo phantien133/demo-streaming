@@ -22,6 +22,23 @@ Health endpoints:
 - `GET /healthz`
 - `GET /api/v1/health`
 
+## Swagger UI
+Generate docs (one-time or after changing annotations):
+
+```bash
+make swagger-install
+make swagger-gen
+```
+
+Open Swagger UI:
+- `http://localhost:8080/swagger/index.html`
+
+If you want demo data in Swagger, prepare local DB:
+
+```bash
+make swagger-db
+```
+
 ## JWT setup (demo)
 - Set app auth config in `.env`:
   - `JWT_SECRET`
@@ -30,7 +47,7 @@ Health endpoints:
   - optional `JWT_REFRESH_TOKEN_TTL_SECONDS` (default 604800, reserved for refresh-token flow)
 - Issue a token:
   - `POST /api/v1/auth/token`
-  - body example: `{"user_id":1,"email":"user@example.com"}`
+  - body example: `{"email":"streamer01@example.com","password":"password123"}`
   - role is assigned by server (`end_user`), TTL is loaded from env.
 - Refresh token (rotation):
   - `POST /api/v1/auth/refresh`
@@ -56,10 +73,25 @@ Services:
 - SRS HLS origin: `http://localhost:8081`
 - Nginx local CDN edge: `http://localhost:8088`
 
+Optional profile:
+- Transcode worker: `docker compose --profile transcode up --build transcode`
+
 ## Streaming flow (demo)
-- Publish from OBS via RTMP: `rtmp://localhost:1935/live/<stream_key>`
-- Playback from SRS origin: `http://localhost:8081/live/<stream_key>.m3u8`
-- Playback from CDN edge: `http://localhost:8088/live/<stream_key>.m3u8`
+See `documents/PLAYBACK_FLOW.md` for the full diagram. Summary:
+
+- Publish from OBS via RTMP: `rtmp://<SRS_HOST>:1935/live/<stream_key>` (stream name = `playback_id`).
+- SRS ingests → **transcoder** (optional profile) produces multi-bitrate HLS under `./tmp/transcode/<playback_id>/`.
+- **Viewer (ABR master):** `http://<CDN_HOST>:8088/live/<playback_id>/master.m3u8` (served from disk when the pack exists).
+- **SRS origin (single-bitrate):** `http://localhost:8081/live/<playback_id>.m3u8`
+- **CDN flat playlist (API → SRS proxy):** `http://<CDN_HOST>:8088/live/<playback_id>.m3u8` — useful before transcode finishes or without the transcode profile.
+
+Dev tip (LAN IP quick setup):
+```bash
+make local-ip
+```
+Set `.env`:
+- `DEV_SRS_RTMP_PUBLISH_BASE_URL=rtmp://<LAN-IP>:1935/live`
+- `DEV_SRS_PLAYBACK_CDN_BASE_URL=http://<LAN-IP>:8088/live`
 
 ## Verify CDN cache behavior
 1. Start stream from OBS.
@@ -68,7 +100,14 @@ Services:
    - `X-Cache-Status: MISS` on first request
    - `X-Cache-Status: HIT` on repeated requests
 
+## Transcode module (MVP)
+- SRS `on_publish` webhook enqueues a transcode job into Redis list `transcode:publish_jobs`.
+- Worker entrypoint: `go run ./cmd/transcode` (or `make transcode-run`).
+- Enable ffmpeg processing by setting `TRANSCODE_ENABLED=true`.
+- Output defaults to `./tmp/transcode/<playback_id>/master.m3u8`.
+
 ## Documentation
+- `documents/PLAYBACK_FLOW.md`: OBS → SRS → transcode → multi-bitrate HLS → player.
 - `documents/PROJECT_OVERVIEW.md`: architecture, components, and roadmap.
 - `documents/SETUP_AND_DEMO.md`: local setup and step-by-step demo runbook.
 - `documents/RTMP_AND_LL_HLS.md`: RTMP ingest and LL-HLS playback (see also `documents/README.md`).
@@ -86,7 +125,7 @@ make migrate-down
 ```
 
 ### Notes
-- Default database URL: `postgres://streaming:streaming@localhost:5432/streaming?sslmode=disable`
+- Default database URL: `postgres://streaming:streaming@localhost:5433/streaming?sslmode=disable`
 - Override any variable at runtime, for example:
   - `make migrate-up DB_HOST=127.0.0.1`
   - `make migrate-up DB_PORT=5432 DB_NAME=streaming`

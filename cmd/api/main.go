@@ -8,6 +8,15 @@ import (
 	"demo-streaming/internal/server"
 )
 
+// @title demo-streaming API
+// @version 1.0
+// @description Go + Gin baseline for a learning-focused streaming system.
+//
+// @BasePath /
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	config.LoadDotEnv()
 	systemCfg := config.LoadSystemConfig()

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict BHrxsz3aS39rOmcjDpt6LU3u4TWU2fcRsvTOUgN5NCU0KSftcoySLGMAYeSANaW
+\restrict 8Zo8jsxo1tBaznfUAlISdJ16I8xkamhGbZe4uec2BfzR3vsNMUeIInGehN2HbGh
 
 -- Dumped from database version 16.11
 -- Dumped by pg_dump version 16.11
@@ -95,6 +95,16 @@ ALTER SEQUENCE public.media_providers_id_seq OWNED BY public.media_providers.id;
 
 
 --
+-- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schema_migrations (
+    version bigint NOT NULL,
+    dirty boolean NOT NULL
+);
+
+
+--
 -- Name: stream_keys; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -135,6 +145,7 @@ ALTER SEQUENCE public.stream_keys_id_seq OWNED BY public.stream_keys.id;
 CREATE TABLE public.stream_publish_sessions (
     id bigint NOT NULL,
     streamer_user_id bigint NOT NULL,
+    playback_id text NOT NULL,
     title text DEFAULT ''::text NOT NULL,
     status text DEFAULT 'created'::text NOT NULL,
     playback_url_cdn text DEFAULT ''::text NOT NULL,
@@ -174,7 +185,8 @@ CREATE TABLE public.users (
     id bigint NOT NULL,
     email text NOT NULL,
     display_name text DEFAULT ''::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    password_hash text DEFAULT ''::text NOT NULL
 );
 
 
@@ -308,6 +320,14 @@ ALTER TABLE ONLY public.media_providers
 
 
 --
+-- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schema_migrations
+    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
 -- Name: stream_keys stream_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -329,6 +349,9 @@ ALTER TABLE ONLY public.stream_keys
 
 ALTER TABLE ONLY public.stream_publish_sessions
     ADD CONSTRAINT stream_publish_sessions_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.stream_publish_sessions
+    ADD CONSTRAINT stream_publish_sessions_playback_id_key UNIQUE (playback_id);
 
 
 --
@@ -493,5 +516,5 @@ ALTER TABLE ONLY public.view_sessions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict BHrxsz3aS39rOmcjDpt6LU3u4TWU2fcRsvTOUgN5NCU0KSftcoySLGMAYeSANaW
+\unrestrict 8Zo8jsxo1tBaznfUAlISdJ16I8xkamhGbZe4uec2BfzR3vsNMUeIInGehN2HbGh
 
